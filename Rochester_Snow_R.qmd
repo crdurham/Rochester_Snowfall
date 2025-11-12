@@ -1,0 +1,85 @@
+---
+title: "Rochester Snowfall Since 1926"
+author: "Cole Durham"
+format: html
+editor: visual
+---
+
+```{r}
+library(dplyr)
+library(lubridate)
+```
+
+## 1. Introduction
+
+In this project, we will explore the monthly and annual trends exhibited in [snowfall (or temp!)]{.underline} data from Rochester, New York, from January of 1926 until October, 2025. The full dataset contains columns for the daily maximum and minimum temperatures, the amount of precipitation, the amount of snowfall, and the total depth of snow measured on the ground.
+
+```{r}
+Rochester <- read.csv("Rochester.csv")
+head(Rochester)
+```
+
+We will convert the columns `TMAX..Degrees.Fahrenheit.` and `SNOW..Inches.` to separate objects and identify any missing values.
+
+```{r}
+#Create snowfall set
+Rochester.snowfall <- Rochester %>% select("Date", "SNOW..Inches.")
+
+#Create max temp set
+Rochester.Tmax <- Rochester %>% select("Date", "TMAX..Degrees.Fahrenheit.")
+
+#Make Date col a true datetime object
+Rochester.snowfall$Date <- as.Date(Rochester.snowfall$Date, format = "%Y-%m-%d")
+Rochester.Tmax$Date     <- as.Date(Rochester.Tmax$Date, format = "%Y-%m-%d")
+
+#Make Year, Month Columns: Should've done before splitting
+Rochester.snowfall$Month <- month(Rochester.snowfall$Date)
+Rochester.snowfall$Year <- year(Rochester.snowfall$Date)
+
+Rochester.Tmax$Month <- month(Rochester.Tmax$Date)
+Rochester.Tmax$Year <- year(Rochester.Tmax$Date)
+
+#Determine dates (rows) with snowfall entered as NA
+(snow.na <- Rochester.snowfall[is.na(Rochester.snowfall$SNOW..Inches.), ])
+
+#Determine dates (rows) with max temp entered as NA
+(Tmax.na <- Rochester.Tmax[is.na(Rochester.Tmax$TMAX..Degrees.Fahrenheit.),])
+```
+
+Unfortunately, we are presented with an immediate issue in the snowfall data: eight consecutive missing values in October, 1929 and almost twenty consecutive missing values in November, 1940. If these were from the typically warmer months of March-August, we could impute zeros with no hesitation; however, Rochester weather can be unruly in autumn. There are two ways to fix the large gaps in the data, the first of which is to simply drop the portion of the observed values prior to 1941. An alternative, since standard techniques (e.g. interpolation, sample mean, last-observation-carry-forward) are generally insufficient for such large gaps is to randomly sample from the same month or week in adjacent years.
+
+Note that all other missing values are isolated and can thus be ignored for the purposes of monthly averages. Indeed, for all other months there is at most one missing value in either series. This means the disparity between what the full average would be, $\mbox{Avg}_f$, and the actual average over valid observations, $\mbox{Avg}_a$, can be estimated. If the full allotment of values for a month are denoted $X_i,\,i=1,\ldots,L$, ordered such that $X_L$ is the one missing observation:
+
+$$
+|\mbox{Avg}_{f} - \mbox{Avg}_a| = \left|\frac{\sum_{i=1}^{L}X_i}{L}-\frac{\sum_{i=1}^{L-1}X_i}{L-1}\right|\\
+=\frac{1}{L(L-1)}\left|(L-1)(X_1+\cdots +X_L)-L(X_1+\cdots +X_{L-1})\right|\\
+=\frac{1}{L}\left|X_L-\mbox{Avg}_a\right|
+$$
+
+The quantity in the last line above is a random variable with mean 0. By Chebyshev's Inequality or similar, assuming the population from which the $X_i$'s are sampled has variance $\sigma^2$ implies $P\left(\frac{1}{L}|X_L-\mbox{Avg}_a|\geq \varepsilon\right)\leq \frac{C}{\varepsilon^2L^2}\sigma^2$. Assuming the standard deviation $\sigma$ is not too large relative to $L\approx 30$, this will be small.
+
+To get a sense of the daily snowfall amounts and maximum temperatures in October and November over the years, we can plot histograms.
+
+```{r}
+hist(Rochester.snowfall[grepl("-10-", Rochester.snowfall$Date), ]$SNOW..Inches., main = "October Snowfall Amount Frequency, Rochester NY",
+     xlab = "Daily Snowfall Amount (inches)")
+
+hist(Rochester.snowfall[grepl("-11-", Rochester.snowfall$Date), ]$SNOW..Inches., main = "November Snowfall Amount Frequency, Rochester NY",
+     xlab = "Daily Snowfall Amount (inches)")
+
+hist(Rochester.Tmax[grepl("-10-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., main = "October Max Temps, Rochester NY",
+     xlab = "Max Temp (deg. F)")
+
+hist(Rochester.Tmax[grepl("-11-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., main = "November Max Temps, Rochester NY",
+     xlab = "Max Temp (deg. F)")
+```
+
+From the histograms for snowfall in October and November, it would not be unreasonable to simply enter zeros for all missing days, but we will take the extra step to sample from the same month in adjacent years.
+
+## 2. Data Cleaning and Organization
+
+```{r}
+#plot(head(Rochester.snowfall$SNOW..Inches., 740))
+max(Rochester.Tmax[grepl("-09-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., na.rm  = TRUE)
+
+```
