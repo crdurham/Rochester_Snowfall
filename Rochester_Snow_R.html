@@ -69,35 +69,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="Rochester_Snow_R_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="Rochester_Snow_R_files/libs/bootstrap/bootstrap-c0367b04c37547644fece4185067e4a7.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN") {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
 
 </head>
 
@@ -158,13 +129,19 @@ Attaching package: 'lubridate'</code></pre>
 
     date, intersect, setdiff, union</code></pre>
 </div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(imputeTS)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Registered S3 method overwritten by 'quantmod':
+  method            from
+  as.zoo.data.frame zoo </code></pre>
+</div>
 </div>
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">1. Introduction</h2>
-<p>In this project, we will explore the monthly and annual trends exhibited in <u>snowfall (or temp!)</u> data from Rochester, New York, from January of 1926 until October, 2025. The full dataset contains columns for the daily maximum and minimum temperatures, the amount of precipitation, the amount of snowfall, and the total depth of snow measured on the ground.</p>
+<p>In this project, we will explore the trends exhibited in snowfall and maximum temperature data from Rochester, New York, from January of 1926 until October, 2025. The full dataset contains columns for the daily maximum and minimum temperatures, the amount of precipitation, the amount of snowfall, and the total depth of snow measured on the ground.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>Rochester <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"Rochester.csv"</span>)</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(Rochester)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>Rochester <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"Rochester.csv"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(Rochester)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>        Date TAVG..Degrees.Fahrenheit. TMAX..Degrees.Fahrenheit.
 1 1926-01-02                        NA                        33
@@ -184,81 +161,86 @@ Attaching package: 'lubridate'</code></pre>
 </div>
 <p>We will convert the columns <code>TMAX..Degrees.Fahrenheit.</code> and <code>SNOW..Inches.</code> to separate objects and identify any missing values.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Create snowfall set</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="st">"Date"</span>, <span class="st">"SNOW..Inches."</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co">#Create max temp set</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="st">"Date"</span>, <span class="st">"TMAX..Degrees.Fahrenheit."</span>)</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co">#Make Date col a true datetime object</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Date <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(Rochester.snowfall<span class="sc">$</span>Date, <span class="at">format =</span> <span class="st">"%Y-%m-%d"</span>)</span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Date     <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(Rochester.Tmax<span class="sc">$</span>Date, <span class="at">format =</span> <span class="st">"%Y-%m-%d"</span>)</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make Year, Month Columns: Should've done before splitting</span></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Month <span class="ot">&lt;-</span> <span class="fu">month</span>(Rochester.snowfall<span class="sc">$</span>Date)</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Year <span class="ot">&lt;-</span> <span class="fu">year</span>(Rochester.snowfall<span class="sc">$</span>Date)</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Month <span class="ot">&lt;-</span> <span class="fu">month</span>(Rochester.Tmax<span class="sc">$</span>Date)</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Year <span class="ot">&lt;-</span> <span class="fu">year</span>(Rochester.Tmax<span class="sc">$</span>Date)</span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co">#Determine dates (rows) with snowfall entered as NA</span></span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>(snow.na <span class="ot">&lt;-</span> Rochester.snowfall[<span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>SNOW..Inches.), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Create snowfall set, then rename col</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="st">"Date"</span>, <span class="st">"SNOW..Inches."</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Date, SNOW..Inches.) <span class="sc">%&gt;%</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">snowfall =</span> SNOW..Inches.)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="co">#Create max temp set, rename col</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="st">"Date"</span>, <span class="st">"TMAX..Degrees.Fahrenheit."</span>)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax <span class="ot">&lt;-</span> Rochester <span class="sc">%&gt;%</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="fu">select</span>(Date, TMAX..Degrees.Fahrenheit.) <span class="sc">%&gt;%</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="fu">rename</span>(<span class="at">tmax =</span> TMAX..Degrees.Fahrenheit.)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="co">#Make Date col a true datetime object</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Date <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(Rochester.snowfall<span class="sc">$</span>Date, <span class="at">format =</span> <span class="st">"%Y-%m-%d"</span>)</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Date     <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(Rochester.Tmax<span class="sc">$</span>Date, <span class="at">format =</span> <span class="st">"%Y-%m-%d"</span>)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a><span class="co">#Make Year, Month, Day Columns: Should've done before splitting</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Month <span class="ot">&lt;-</span> <span class="fu">month</span>(Rochester.snowfall<span class="sc">$</span>Date)</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Year <span class="ot">&lt;-</span> <span class="fu">year</span>(Rochester.snowfall<span class="sc">$</span>Date)</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>Day <span class="ot">&lt;-</span> <span class="fu">day</span>(Rochester.snowfall<span class="sc">$</span>Date)</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Month <span class="ot">&lt;-</span> <span class="fu">month</span>(Rochester.Tmax<span class="sc">$</span>Date)</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Year <span class="ot">&lt;-</span> <span class="fu">year</span>(Rochester.Tmax<span class="sc">$</span>Date)</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>Rochester.Tmax<span class="sc">$</span>Day <span class="ot">&lt;-</span> <span class="fu">day</span>(Rochester.Tmax<span class="sc">$</span>Date)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a><span class="co">#Determine dates (rows) with snowfall entered as NA</span></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>(snow.na <span class="ot">&lt;-</span> Rochester.snowfall[<span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>            Date SNOW..Inches. Month Year
-55    1926-02-25            NA     2 1926
-1377  1929-10-09            NA    10 1929
-1378  1929-10-10            NA    10 1929
-1379  1929-10-11            NA    10 1929
-1380  1929-10-12            NA    10 1929
-1381  1929-10-13            NA    10 1929
-1382  1929-10-14            NA    10 1929
-1383  1929-10-15            NA    10 1929
-1384  1929-10-16            NA    10 1929
-2389  1932-07-17            NA     7 1932
-5430  1940-11-13            NA    11 1940
-5431  1940-11-14            NA    11 1940
-5432  1940-11-15            NA    11 1940
-5433  1940-11-16            NA    11 1940
-5434  1940-11-17            NA    11 1940
-5435  1940-11-18            NA    11 1940
-5436  1940-11-19            NA    11 1940
-5437  1940-11-20            NA    11 1940
-5438  1940-11-21            NA    11 1940
-5439  1940-11-22            NA    11 1940
-5440  1940-11-23            NA    11 1940
-5441  1940-11-24            NA    11 1940
-5442  1940-11-25            NA    11 1940
-5443  1940-11-26            NA    11 1940
-5444  1940-11-27            NA    11 1940
-5445  1940-11-28            NA    11 1940
-5446  1940-11-29            NA    11 1940
-5447  1940-11-30            NA    11 1940
-7987  1947-11-14            NA    11 1947
-25750 1996-07-02            NA     7 1996
-25753 1996-07-05            NA     7 1996
-25754 1996-07-06            NA     7 1996
-25779 1996-07-31            NA     7 1996</code></pre>
+<pre><code>            Date snowfall Month Year Day
+55    1926-02-25       NA     2 1926  25
+1377  1929-10-09       NA    10 1929   9
+1378  1929-10-10       NA    10 1929  10
+1379  1929-10-11       NA    10 1929  11
+1380  1929-10-12       NA    10 1929  12
+1381  1929-10-13       NA    10 1929  13
+1382  1929-10-14       NA    10 1929  14
+1383  1929-10-15       NA    10 1929  15
+1384  1929-10-16       NA    10 1929  16
+2389  1932-07-17       NA     7 1932  17
+5430  1940-11-13       NA    11 1940  13
+5431  1940-11-14       NA    11 1940  14
+5432  1940-11-15       NA    11 1940  15
+5433  1940-11-16       NA    11 1940  16
+5434  1940-11-17       NA    11 1940  17
+5435  1940-11-18       NA    11 1940  18
+5436  1940-11-19       NA    11 1940  19
+5437  1940-11-20       NA    11 1940  20
+5438  1940-11-21       NA    11 1940  21
+5439  1940-11-22       NA    11 1940  22
+5440  1940-11-23       NA    11 1940  23
+5441  1940-11-24       NA    11 1940  24
+5442  1940-11-25       NA    11 1940  25
+5443  1940-11-26       NA    11 1940  26
+5444  1940-11-27       NA    11 1940  27
+5445  1940-11-28       NA    11 1940  28
+5446  1940-11-29       NA    11 1940  29
+5447  1940-11-30       NA    11 1940  30
+7987  1947-11-14       NA    11 1947  14
+25750 1996-07-02       NA     7 1996   2
+25753 1996-07-05       NA     7 1996   5
+25754 1996-07-06       NA     7 1996   6
+25779 1996-07-31       NA     7 1996  31</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Determine dates (rows) with max temp entered as NA</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>(Tmax.na <span class="ot">&lt;-</span> Rochester.Tmax[<span class="fu">is.na</span>(Rochester.Tmax<span class="sc">$</span>TMAX..Degrees.Fahrenheit.),])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Determine dates (rows) with max temp entered as NA</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>(Tmax.na <span class="ot">&lt;-</span> Rochester.Tmax[<span class="fu">is.na</span>(Rochester.Tmax<span class="sc">$</span>tmax),])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>           Date TMAX..Degrees.Fahrenheit. Month Year
-2389 1932-07-17                        NA     7 1932
-6259 1943-02-20                        NA     2 1943</code></pre>
+<pre><code>           Date tmax Month Year Day
+2389 1932-07-17   NA     7 1932  17
+6259 1943-02-20   NA     2 1943  20</code></pre>
 </div>
 </div>
-<p>Unfortunately, we are presented with an immediate issue in the snowfall data: eight consecutive missing values in October, 1929 and almost twenty consecutive missing values in November, 1940. If these were from the typically warmer months of March-August, we could impute zeros with no hesitation; however, Rochester weather can be unruly in autumn. There are two ways to fix the large gaps in the data, the first of which is to simply drop the portion of the observed values prior to 1941. An alternative, since standard techniques (e.g.&nbsp;interpolation, sample mean, last-observation-carry-forward) are generally insufficient for such large gaps is to randomly sample from the same month or week in adjacent years.</p>
-<p>Note that all other missing values are isolated and can thus be ignored for the purposes of monthly averages. Indeed, for all other months there is at most one missing value in either series. This means the disparity between what the full average would be, <span class="math inline">\(\mbox{Avg}_f\)</span>, and the actual average over valid observations, <span class="math inline">\(\mbox{Avg}_a\)</span>, can be estimated. If the full allotment of values for a month are denoted <span class="math inline">\(X_i,\,i=1,\ldots,L\)</span>, ordered such that <span class="math inline">\(X_L\)</span> is the one missing observation:</p>
-<p><span class="math display">\[
-|\mbox{Avg}_{f} - \mbox{Avg}_a| = \left|\frac{\sum_{i=1}^{L}X_i}{L}-\frac{\sum_{i=1}^{L-1}X_i}{L-1}\right|\\
-=\frac{1}{L(L-1)}\left|(L-1)(X_1+\cdots +X_L)-L(X_1+\cdots +X_{L-1})\right|\\
-=\frac{1}{L}\left|X_L-\mbox{Avg}_a\right|
-\]</span></p>
-<p>The quantity in the last line above is a random variable with mean 0. By Chebyshev’s Inequality or similar, assuming the population from which the <span class="math inline">\(X_i\)</span>’s are sampled has variance <span class="math inline">\(\sigma^2\)</span> implies <span class="math inline">\(P\left(\frac{1}{L}|X_L-\mbox{Avg}_a|\geq \varepsilon\right)\leq \frac{C}{\varepsilon^2L^2}\sigma^2\)</span>. Assuming the standard deviation <span class="math inline">\(\sigma\)</span> is not too large relative to <span class="math inline">\(L\approx 30\)</span>, this will be small.</p>
+<p>Unfortunately, we are presented with an immediate issue in the snowfall data: eight consecutive missing values in October, 1929 and almost twenty consecutive missing values in November, 1940. If these were from the warmer months of March-August, we could impute zeros with no hesitation; however, Rochester weather can be unruly in autumn. There are two ways to fix the largest gaps in the data, the first of which is to simply drop the portion of the observed values prior to 1941. An alternative, since standard techniques (e.g.&nbsp;interpolation, sample mean, last-observation-carry-forward) are generally insufficient for such large gaps, is to randomly sample from the same month in adjacent years.</p>
 <p>To get a sense of the daily snowfall amounts and maximum temperatures in October and November over the years, we can plot histograms.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.snowfall[<span class="fu">grepl</span>(<span class="st">"-10-"</span>, Rochester.snowfall<span class="sc">$</span>Date), ]<span class="sc">$</span>SNOW..Inches., <span class="at">main =</span> <span class="st">"October Snowfall Amount Frequency, Rochester NY"</span>,</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Daily Snowfall Amount (inches)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.snowfall[<span class="fu">grepl</span>(<span class="st">"-10-"</span>, Rochester.snowfall<span class="sc">$</span>Date), ]<span class="sc">$</span>snowfall, <span class="at">main =</span> <span class="st">"October Snowfall Amount Frequency, Rochester NY"</span>,</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Daily Snowfall Amount (inches)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -266,8 +248,8 @@ Attaching package: 'lubridate'</code></pre>
 </figure>
 </div>
 </div>
-<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.snowfall[<span class="fu">grepl</span>(<span class="st">"-11-"</span>, Rochester.snowfall<span class="sc">$</span>Date), ]<span class="sc">$</span>SNOW..Inches., <span class="at">main =</span> <span class="st">"November Snowfall Amount Frequency, Rochester NY"</span>,</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Daily Snowfall Amount (inches)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.snowfall[<span class="fu">grepl</span>(<span class="st">"-11-"</span>, Rochester.snowfall<span class="sc">$</span>Date), ]<span class="sc">$</span>snowfall, <span class="at">main =</span> <span class="st">"November Snowfall Amount Frequency, Rochester NY"</span>,</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Daily Snowfall Amount (inches)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -275,8 +257,8 @@ Attaching package: 'lubridate'</code></pre>
 </figure>
 </div>
 </div>
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.Tmax[<span class="fu">grepl</span>(<span class="st">"-10-"</span>, Rochester.Tmax<span class="sc">$</span>Date), ]<span class="sc">$</span>TMAX..Degrees.Fahrenheit., <span class="at">main =</span> <span class="st">"October Max Temps, Rochester NY"</span>,</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Max Temp (deg. F)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.Tmax[<span class="fu">grepl</span>(<span class="st">"-10-"</span>, Rochester.Tmax<span class="sc">$</span>Date), ]<span class="sc">$</span>tmax, <span class="at">main =</span> <span class="st">"October Max Temps, Rochester NY"</span>,</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Max Temp (deg. F)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -284,8 +266,8 @@ Attaching package: 'lubridate'</code></pre>
 </figure>
 </div>
 </div>
-<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.Tmax[<span class="fu">grepl</span>(<span class="st">"-11-"</span>, Rochester.Tmax<span class="sc">$</span>Date), ]<span class="sc">$</span>TMAX..Degrees.Fahrenheit., <span class="at">main =</span> <span class="st">"November Max Temps, Rochester NY"</span>,</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Max Temp (deg. F)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(Rochester.Tmax[<span class="fu">grepl</span>(<span class="st">"-11-"</span>, Rochester.Tmax<span class="sc">$</span>Date), ]<span class="sc">$</span>tmax, <span class="at">main =</span> <span class="st">"November Max Temps, Rochester NY"</span>,</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Max Temp (deg. F)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -298,12 +280,232 @@ Attaching package: 'lubridate'</code></pre>
 </section>
 <section id="data-cleaning-and-organization" class="level2">
 <h2 class="anchored" data-anchor-id="data-cleaning-and-organization">2. Data Cleaning and Organization</h2>
+<p>The largest gaps in the snowfall data occur in October, 1929 and November, 1940. These values will be imputed by sampling with replacement from the same month in adjacent years.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">#plot(head(Rochester.snowfall$SNOW..Inches., 740))</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">max</span>(Rochester.Tmax[<span class="fu">grepl</span>(<span class="st">"-09-"</span>, Rochester.Tmax<span class="sc">$</span>Date), ]<span class="sc">$</span>TMAX..Degrees.Fahrenheit., <span class="at">na.rm  =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Identify NA rows from October, 1929</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>oct29_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">10</span> <span class="sc">&amp;</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1929</span> <span class="sc">&amp;</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co">#Identify NA rows from November, 1940</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>nov40_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">11</span> <span class="sc">&amp;</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1940</span> <span class="sc">&amp;</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a><span class="co">#Gather same months from adjacent years (Oct 1927/30, Nov 1939/41)</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>adj_oct <span class="ot">&lt;-</span> Rochester.snowfall <span class="sc">%&gt;%</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="fu">format</span>(Date, <span class="st">"%Y-%m"</span>) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"1927-10"</span>, <span class="st">"1930-10"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(snowfall)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a><span class="fu">pull</span>(snowfall)  </span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>adjacent_nov <span class="ot">&lt;-</span> Rochester.snowfall <span class="sc">%&gt;%</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="fu">format</span>(Date, <span class="st">"%Y-%m"</span>) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"1939-11"</span>, <span class="st">"1941-11"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(snowfall)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a><span class="fu">pull</span>(snowfall)</span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a><span class="co">#Set seed to reproduce; sample with replacement from the adjacent yr numeric vectors</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>) </span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[oct29_idx] <span class="ot">&lt;-</span> <span class="fu">sample</span>(</span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>  adj_oct,</span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">size =</span> <span class="fu">length</span>(oct29_idx),</span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>  <span class="at">replace =</span> <span class="cn">TRUE</span></span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[nov40_idx] <span class="ot">&lt;-</span> <span class="fu">sample</span>(</span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a>  adjacent_nov,</span>
+<span id="cb20-36"><a href="#cb20-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">size =</span> <span class="fu">length</span>(nov40_idx),</span>
+<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a>  <span class="at">replace =</span> <span class="cn">TRUE</span></span>
+<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-39"><a href="#cb20-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-40"><a href="#cb20-40" aria-hidden="true" tabindex="-1"></a><span class="co">#Check for NA again; should be greatly reduced</span></span>
+<span id="cb20-41"><a href="#cb20-41" aria-hidden="true" tabindex="-1"></a>(snow.na<span class="fl">.1</span> <span class="ot">&lt;-</span> Rochester.snowfall[<span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[1] 99</code></pre>
+<pre><code>            Date snowfall Month Year Day
+55    1926-02-25       NA     2 1926  25
+2389  1932-07-17       NA     7 1932  17
+7987  1947-11-14       NA    11 1947  14
+25750 1996-07-02       NA     7 1996   2
+25753 1996-07-05       NA     7 1996   5
+25754 1996-07-06       NA     7 1996   6
+25779 1996-07-31       NA     7 1996  31</code></pre>
 </div>
+</div>
+<p>Now the missing values from the month of July in 1932 and 1996 will be imputed as 0.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Identify NA rows from July, 1996</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>jul96_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">7</span> <span class="sc">&amp;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1996</span> <span class="sc">&amp;</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>jul32_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">7</span> <span class="sc">&amp;</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1932</span> <span class="sc">&amp;</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Replace</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[jul96_idx] <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[jul32_idx] <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a><span class="co">#Another check of remaining NA rows</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>(snow.na<span class="fl">.1</span> <span class="ot">&lt;-</span> Rochester.snowfall[<span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           Date snowfall Month Year Day
+55   1926-02-25       NA     2 1926  25
+7987 1947-11-14       NA    11 1947  14</code></pre>
+</div>
+</div>
+<p>The remaining two missing data points will be filled according to LOCF (last-observed-carry-forward) method.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>feb25_26_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">2</span> <span class="sc">&amp;</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1926</span> <span class="sc">&amp;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Day <span class="sc">==</span> <span class="dv">25</span> <span class="sc">&amp;</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>feb24_26_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">2</span> <span class="sc">&amp;</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1926</span> <span class="sc">&amp;</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Day <span class="sc">==</span> <span class="dv">24</span>)</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>nov14_47_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">11</span> <span class="sc">&amp;</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1947</span> <span class="sc">&amp;</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Day <span class="sc">==</span> <span class="dv">14</span> <span class="sc">&amp;</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall)</span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>nov13_47_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(</span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Month <span class="sc">==</span> <span class="dv">11</span> <span class="sc">&amp;</span></span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Year <span class="sc">==</span> <span class="dv">1947</span> <span class="sc">&amp;</span></span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>  Rochester.snowfall<span class="sc">$</span>Day <span class="sc">==</span> <span class="dv">13</span></span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[feb25_26_idx] <span class="ot">&lt;-</span> Rochester.snowfall<span class="sc">$</span>snowfall[feb24_26_idx]</span>
+<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>Rochester.snowfall<span class="sc">$</span>snowfall[nov14_47_idx] <span class="ot">&lt;-</span> Rochester.snowfall<span class="sc">$</span>snowfall[nov13_47_idx]</span>
+<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a><span class="co">#Hopefully, final check</span></span>
+<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>(snow.na<span class="fl">.2</span> <span class="ot">&lt;-</span> Rochester.snowfall[<span class="fu">is.na</span>(Rochester.snowfall<span class="sc">$</span>snowfall), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] Date     snowfall Month    Year     Day     
+&lt;0 rows&gt; (or 0-length row.names)</code></pre>
+</div>
+</div>
+<p>The snowfall data has been successfully cleaned. Now we will look to address the missing maximum temperature entries. In order to get a sense of what imputation method will work best, we need to zoom in on the days near July 17, 1932, and February 20, 1943.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">4</span>,<span class="dv">1</span>,<span class="dv">1</span>))</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>missing_temp_32 <span class="ot">&lt;-</span> Rochester.Tmax[Rochester.Tmax<span class="sc">$</span>Date <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"1932-07-10"</span>) <span class="sc">&amp;</span> </span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>                                Rochester.Tmax<span class="sc">$</span>Date <span class="sc">&lt;=</span> <span class="fu">as.Date</span>(<span class="st">"1932-07-24"</span>), ]</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>missing_temp_43 <span class="ot">&lt;-</span> Rochester.Tmax[Rochester.Tmax<span class="sc">$</span>Date <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"1943-02-13"</span>) <span class="sc">&amp;</span> </span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>                                Rochester.Tmax<span class="sc">$</span>Date <span class="sc">&lt;=</span> <span class="fu">as.Date</span>(<span class="st">"1943-02-27"</span>), ]</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(missing_temp_32<span class="sc">$</span>tmax, <span class="at">main=</span><span class="st">"Maximum Temperatures 07/10/32-07/24/32"</span>,</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Max Temp"</span>)</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(missing_temp_43<span class="sc">$</span>tmax, <span class="at">main=</span><span class="st">"Maximum Temperatures 02/13/43-02/27/43"</span>,</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Max Temp"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Rochester_Snow_R_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The best available option is to use a spline to interpolate and impute. This is automated using the <code>imputeTS</code> package. We will impute and look locally at the values to make sure everything is reasonably done before imputing in the actual series.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow=</span><span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">4</span>,<span class="dv">1</span>,<span class="dv">1</span>))</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co">#Spline interps</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>missing_temp_32<span class="sc">$</span>tmax_interp <span class="ot">&lt;-</span> <span class="fu">na_interpolation</span>(missing_temp_32<span class="sc">$</span>tmax, <span class="at">option =</span> <span class="st">"spline"</span>)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>missing_temp_43<span class="sc">$</span>tmax_interp <span class="ot">&lt;-</span> <span class="fu">na_interpolation</span>(missing_temp_43<span class="sc">$</span>tmax, <span class="at">option =</span> <span class="st">"spline"</span>)</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot_na_imputations</span>(<span class="at">x_with_imputations =</span> missing_temp_32<span class="sc">$</span>tmax_interp,</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>                      <span class="at">x_with_na =</span> missing_temp_32<span class="sc">$</span>tmax,</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>                      <span class="at">title =</span> <span class="st">"Max Temp Impute via Spline: July, 1932"</span>,</span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>                  <span class="at">xlab =</span> <span class="st">"Time"</span>,</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ylab =</span> <span class="st">"Max Temp"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Rochester_Snow_R_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot_na_imputations</span>(<span class="at">x_with_imputations =</span> missing_temp_43<span class="sc">$</span>tmax_interp,</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>                      <span class="at">x_with_na =</span> missing_temp_43<span class="sc">$</span>tmax,</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>                      <span class="at">title =</span> <span class="st">"Max Temp Impute via Spline: February, 1943"</span>,</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>                  <span class="at">xlab =</span> <span class="st">"Time"</span>,</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ylab =</span> <span class="st">"Max Temp"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Rochester_Snow_R_files/figure-html/unnamed-chunk-9-2.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>monthly_snowfall <span class="ot">&lt;-</span> Rochester.snowfall <span class="sc">%&gt;%</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(Year, Month) <span class="sc">%&gt;%</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">tot_snow =</span> <span class="fu">sum</span>(snowfall, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>`summarise()` has grouped output by 'Year'. You can override using the
+`.groups` argument.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>monthly_tmax <span class="ot">&lt;-</span> Rochester.Tmax <span class="sc">%&gt;%</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(Year, Month) <span class="sc">%&gt;%</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_tmax =</span> <span class="fu">mean</span>(tmax, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>`summarise()` has grouped output by 'Year'. You can override using the
+`.groups` argument.</code></pre>
+</div>
+</div>
+<p>Before making proper time series objects, we have to make sure the data is ordered properly by year and month, and that none of the monthly values has been set as NA.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>monthly_tmax <span class="ot">&lt;-</span> monthly_tmax[<span class="fu">order</span>(monthly_tmax<span class="sc">$</span>Year, monthly_tmax<span class="sc">$</span>Month), ]</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>monthly_snowfall <span class="ot">&lt;-</span> monthly_snowfall[<span class="fu">order</span>(monthly_snowfall<span class="sc">$</span>Year, monthly_snowfall<span class="sc">$</span>Month), ]</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>(snow.na<span class="fl">.2</span> <span class="ot">&lt;-</span> monthly_snowfall[<span class="fu">is.na</span>(monthly_snowfall<span class="sc">$</span>tot_snow), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 0 × 3
+# Groups:   Year [0]
+# ℹ 3 variables: Year &lt;dbl&gt;, Month &lt;dbl&gt;, tot_snow &lt;dbl&gt;</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>(temp.na <span class="ot">&lt;-</span> monthly_tmax[<span class="fu">is.na</span>(monthly_tmax<span class="sc">$</span>mean_tmax), ])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 0 × 3
+# Groups:   Year [0]
+# ℹ 3 variables: Year &lt;dbl&gt;, Month &lt;dbl&gt;, mean_tmax &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<p>Finally, our time series objects can be created.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>temps <span class="ot">&lt;-</span> <span class="fu">ts</span>(monthly_tmax<span class="sc">$</span>mean_tmax, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1926</span>,<span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>)</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>snowfall <span class="ot">&lt;-</span> <span class="fu">ts</span>(monthly_snowfall<span class="sc">$</span>tot_snow, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1926</span>,<span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>)</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ts.plot</span>(<span class="fu">window</span>(snowfall, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1926</span>, <span class="dv">2</span>), <span class="at">end =</span> <span class="fu">c</span>(<span class="dv">1926</span>,<span class="dv">4</span>), <span class="at">frequency =</span> <span class="dv">12</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Rochester_Snow_R_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(astsa)</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>?gtemp_both</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 

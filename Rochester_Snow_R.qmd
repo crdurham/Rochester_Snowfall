@@ -8,11 +8,12 @@ editor: visual
 ```{r}
 library(dplyr)
 library(lubridate)
+library(imputeTS)
 ```
 
 ## 1. Introduction
 
-In this project, we will explore the monthly and annual trends exhibited in [snowfall (or temp!)]{.underline} data from Rochester, New York, from January of 1926 until October, 2025. The full dataset contains columns for the daily maximum and minimum temperatures, the amount of precipitation, the amount of snowfall, and the total depth of snow measured on the ground.
+In this project, we will explore the trends exhibited in snowfall and maximum temperature data from Rochester, New York, from January of 1926 until October, 2025. The full dataset contains columns for the daily maximum and minimum temperatures, the amount of precipitation, the amount of snowfall, and the total depth of snow measured on the ground.
 
 ```{r}
 Rochester <- read.csv("Rochester.csv")
@@ -22,55 +23,57 @@ head(Rochester)
 We will convert the columns `TMAX..Degrees.Fahrenheit.` and `SNOW..Inches.` to separate objects and identify any missing values.
 
 ```{r}
-#Create snowfall set
+#Create snowfall set, then rename col
 Rochester.snowfall <- Rochester %>% select("Date", "SNOW..Inches.")
 
-#Create max temp set
+Rochester.snowfall <- Rochester %>%
+  select(Date, SNOW..Inches.) %>%
+  rename(snowfall = SNOW..Inches.)
+
+#Create max temp set, rename col
 Rochester.Tmax <- Rochester %>% select("Date", "TMAX..Degrees.Fahrenheit.")
+
+Rochester.Tmax <- Rochester %>%
+select(Date, TMAX..Degrees.Fahrenheit.) %>%
+rename(tmax = TMAX..Degrees.Fahrenheit.)
 
 #Make Date col a true datetime object
 Rochester.snowfall$Date <- as.Date(Rochester.snowfall$Date, format = "%Y-%m-%d")
 Rochester.Tmax$Date     <- as.Date(Rochester.Tmax$Date, format = "%Y-%m-%d")
 
-#Make Year, Month Columns: Should've done before splitting
+#Make Year, Month, Day Columns: Should've done before splitting
 Rochester.snowfall$Month <- month(Rochester.snowfall$Date)
 Rochester.snowfall$Year <- year(Rochester.snowfall$Date)
+Rochester.snowfall$Day <- day(Rochester.snowfall$Date)
+
 
 Rochester.Tmax$Month <- month(Rochester.Tmax$Date)
 Rochester.Tmax$Year <- year(Rochester.Tmax$Date)
+Rochester.Tmax$Day <- day(Rochester.Tmax$Date)
+
 
 #Determine dates (rows) with snowfall entered as NA
-(snow.na <- Rochester.snowfall[is.na(Rochester.snowfall$SNOW..Inches.), ])
+(snow.na <- Rochester.snowfall[is.na(Rochester.snowfall$snowfall), ])
 
 #Determine dates (rows) with max temp entered as NA
-(Tmax.na <- Rochester.Tmax[is.na(Rochester.Tmax$TMAX..Degrees.Fahrenheit.),])
+(Tmax.na <- Rochester.Tmax[is.na(Rochester.Tmax$tmax),])
 ```
 
-Unfortunately, we are presented with an immediate issue in the snowfall data: eight consecutive missing values in October, 1929 and almost twenty consecutive missing values in November, 1940. If these were from the typically warmer months of March-August, we could impute zeros with no hesitation; however, Rochester weather can be unruly in autumn. There are two ways to fix the large gaps in the data, the first of which is to simply drop the portion of the observed values prior to 1941. An alternative, since standard techniques (e.g. interpolation, sample mean, last-observation-carry-forward) are generally insufficient for such large gaps is to randomly sample from the same month or week in adjacent years.
-
-Note that all other missing values are isolated and can thus be ignored for the purposes of monthly averages. Indeed, for all other months there is at most one missing value in either series. This means the disparity between what the full average would be, $\mbox{Avg}_f$, and the actual average over valid observations, $\mbox{Avg}_a$, can be estimated. If the full allotment of values for a month are denoted $X_i,\,i=1,\ldots,L$, ordered such that $X_L$ is the one missing observation:
-
-$$
-|\mbox{Avg}_{f} - \mbox{Avg}_a| = \left|\frac{\sum_{i=1}^{L}X_i}{L}-\frac{\sum_{i=1}^{L-1}X_i}{L-1}\right|\\
-=\frac{1}{L(L-1)}\left|(L-1)(X_1+\cdots +X_L)-L(X_1+\cdots +X_{L-1})\right|\\
-=\frac{1}{L}\left|X_L-\mbox{Avg}_a\right|
-$$
-
-The quantity in the last line above is a random variable with mean 0. By Chebyshev's Inequality or similar, assuming the population from which the $X_i$'s are sampled has variance $\sigma^2$ implies $P\left(\frac{1}{L}|X_L-\mbox{Avg}_a|\geq \varepsilon\right)\leq \frac{C}{\varepsilon^2L^2}\sigma^2$. Assuming the standard deviation $\sigma$ is not too large relative to $L\approx 30$, this will be small.
+Unfortunately, we are presented with an immediate issue in the snowfall data: eight consecutive missing values in October, 1929 and almost twenty consecutive missing values in November, 1940. If these were from the warmer months of March-August, we could impute zeros with no hesitation; however, Rochester weather can be unruly in autumn. There are two ways to fix the largest gaps in the data, the first of which is to simply drop the portion of the observed values prior to 1941. An alternative, since standard techniques (e.g. interpolation, sample mean, last-observation-carry-forward) are generally insufficient for such large gaps, is to randomly sample from the same month in adjacent years.
 
 To get a sense of the daily snowfall amounts and maximum temperatures in October and November over the years, we can plot histograms.
 
 ```{r}
-hist(Rochester.snowfall[grepl("-10-", Rochester.snowfall$Date), ]$SNOW..Inches., main = "October Snowfall Amount Frequency, Rochester NY",
+hist(Rochester.snowfall[grepl("-10-", Rochester.snowfall$Date), ]$snowfall, main = "October Snowfall Amount Frequency, Rochester NY",
      xlab = "Daily Snowfall Amount (inches)")
 
-hist(Rochester.snowfall[grepl("-11-", Rochester.snowfall$Date), ]$SNOW..Inches., main = "November Snowfall Amount Frequency, Rochester NY",
+hist(Rochester.snowfall[grepl("-11-", Rochester.snowfall$Date), ]$snowfall, main = "November Snowfall Amount Frequency, Rochester NY",
      xlab = "Daily Snowfall Amount (inches)")
 
-hist(Rochester.Tmax[grepl("-10-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., main = "October Max Temps, Rochester NY",
+hist(Rochester.Tmax[grepl("-10-", Rochester.Tmax$Date), ]$tmax, main = "October Max Temps, Rochester NY",
      xlab = "Max Temp (deg. F)")
 
-hist(Rochester.Tmax[grepl("-11-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., main = "November Max Temps, Rochester NY",
+hist(Rochester.Tmax[grepl("-11-", Rochester.Tmax$Date), ]$tmax, main = "November Max Temps, Rochester NY",
      xlab = "Max Temp (deg. F)")
 ```
 
@@ -78,8 +81,218 @@ From the histograms for snowfall in October and November, it would not be unreas
 
 ## 2. Data Cleaning and Organization
 
-```{r}
-#plot(head(Rochester.snowfall$SNOW..Inches., 740))
-max(Rochester.Tmax[grepl("-09-", Rochester.Tmax$Date), ]$TMAX..Degrees.Fahrenheit., na.rm  = TRUE)
+The largest gaps in the snowfall data occur in October, 1929 and November, 1940. These values will be imputed by sampling with replacement from the same month in adjacent years.
 
+```{r}
+#Identify NA rows from October, 1929
+oct29_idx <- which(
+  Rochester.snowfall$Month == 10 &
+  Rochester.snowfall$Year == 1929 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+#Identify NA rows from November, 1940
+nov40_idx <- which(
+  Rochester.snowfall$Month == 11 &
+  Rochester.snowfall$Year == 1940 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+#Gather same months from adjacent years (Oct 1927/30, Nov 1939/41)
+adj_oct <- Rochester.snowfall %>%
+filter(format(Date, "%Y-%m") %in% c("1927-10", "1930-10")) %>%
+filter(!is.na(snowfall)) %>%
+pull(snowfall)  
+  
+adjacent_nov <- Rochester.snowfall %>%
+filter(format(Date, "%Y-%m") %in% c("1939-11", "1941-11")) %>%
+filter(!is.na(snowfall)) %>%
+pull(snowfall)
+
+#Set seed to reproduce; sample with replacement from the adjacent yr numeric vectors
+set.seed(42) 
+Rochester.snowfall$snowfall[oct29_idx] <- sample(
+  adj_oct,
+  size = length(oct29_idx),
+  replace = TRUE
+)
+
+Rochester.snowfall$snowfall[nov40_idx] <- sample(
+  adjacent_nov,
+  size = length(nov40_idx),
+  replace = TRUE
+)
+
+#Check for NA again; should be greatly reduced
+(snow.na.1 <- Rochester.snowfall[is.na(Rochester.snowfall$snowfall), ])
+
+```
+
+Now the missing values from the month of July in 1932 and 1996 will be imputed as 0.
+
+```{r}
+#Identify NA rows from July, 1996
+jul96_idx <- which(
+  Rochester.snowfall$Month == 7 &
+  Rochester.snowfall$Year == 1996 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+jul32_idx <- which(
+  Rochester.snowfall$Month == 7 &
+  Rochester.snowfall$Year == 1932 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+#Replace
+Rochester.snowfall$snowfall[jul96_idx] <- 0
+Rochester.snowfall$snowfall[jul32_idx] <- 0
+
+#Another check of remaining NA rows
+(snow.na.1 <- Rochester.snowfall[is.na(Rochester.snowfall$snowfall), ])
+
+```
+
+The remaining two missing data points will be filled according to LOCF (last-observed-carry-forward) method.
+
+```{r}
+feb25_26_idx <- which(
+  Rochester.snowfall$Month == 2 &
+  Rochester.snowfall$Year == 1926 &
+  Rochester.snowfall$Day == 25 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+feb24_26_idx <- which(
+  Rochester.snowfall$Month == 2 &
+  Rochester.snowfall$Year == 1926 &
+  Rochester.snowfall$Day == 24)
+
+nov14_47_idx <- which(
+  Rochester.snowfall$Month == 11 &
+  Rochester.snowfall$Year == 1947 &
+  Rochester.snowfall$Day == 14 &
+  is.na(Rochester.snowfall$snowfall)
+)
+
+nov13_47_idx <- which(
+  Rochester.snowfall$Month == 11 &
+  Rochester.snowfall$Year == 1947 &
+  Rochester.snowfall$Day == 13
+)
+
+Rochester.snowfall$snowfall[feb25_26_idx] <- Rochester.snowfall$snowfall[feb24_26_idx]
+Rochester.snowfall$snowfall[nov14_47_idx] <- Rochester.snowfall$snowfall[nov13_47_idx]
+
+#Hopefully, final check
+(snow.na.2 <- Rochester.snowfall[is.na(Rochester.snowfall$snowfall), ])
+
+```
+
+The snowfall data has been successfully cleaned. Now we will look to address the missing maximum temperature entries. In order to get a sense of what imputation method will work best, we need to zoom in on the days near July 17, 1932, and February 20, 1943.
+
+```{r}
+par(mfrow = c(2,1), mar = c(2,4,1,1))
+missing_temp_32 <- Rochester.Tmax[Rochester.Tmax$Date >= as.Date("1932-07-10") & 
+                                Rochester.Tmax$Date <= as.Date("1932-07-24"), ]
+missing_temp_43 <- Rochester.Tmax[Rochester.Tmax$Date >= as.Date("1943-02-13") & 
+                                Rochester.Tmax$Date <= as.Date("1943-02-27"), ]
+plot(missing_temp_32$tmax, main="Maximum Temperatures 07/10/32-07/24/32",
+     ylab = "Max Temp")
+plot(missing_temp_43$tmax, main="Maximum Temperatures 02/13/43-02/27/43",
+     ylab = "Max Temp")
+```
+
+The best available option is to use a spline to interpolate and impute. This is automated using the `imputeTS` package. We will impute and look locally at the values to make sure everything is reasonably done before imputing in the actual series.
+
+```{r}
+par(mfrow=c(2,1), mar = c(2,4,1,1))
+#Spline interps
+missing_temp_32$tmax_interp <- na_interpolation(missing_temp_32$tmax, option = "spline")
+missing_temp_43$tmax_interp <- na_interpolation(missing_temp_43$tmax, option = "spline")
+
+
+ggplot_na_imputations(x_with_imputations = missing_temp_32$tmax_interp,
+                      x_with_na = missing_temp_32$tmax,
+                      title = "Max Temp Impute via Spline: July, 1932",
+                  xlab = "Time",
+                  ylab = "Max Temp")
+
+ggplot_na_imputations(x_with_imputations = missing_temp_43$tmax_interp,
+                      x_with_na = missing_temp_43$tmax,
+                      title = "Max Temp Impute via Spline: February, 1943",
+                  xlab = "Time",
+                  ylab = "Max Temp")
+```
+
+These are reasonable visually, though this is a nebulous assessment at best. We will impute using this method.
+
+```{r}
+#Replace NA temp values via spline interpolation
+Rochester.Tmax$tmax <- na_interpolation(Rochester.Tmax$tmax, option = "spline")
+(Tmax.na1 <- Rochester.Tmax[is.na(Rochester.Tmax$tmax),])
+```
+
+Now we will compile our time series to contain the following information (noting we do not have January 1st, 1926):
+
+-   Total monthly snowfall
+
+-   Average monthly maximum temperature
+
+-   Total annual snowfall deviation: compare total annual snowfall for each year to the yearly average across 1991-2020. In particular, take $T_i-R$ where $T_i$ is the annual total snowfall for year $i$ and $R$ is the reference snowfall. This quantity will be nonnegative when at least as much snow fell in year $i$ compared to the reference amount, and negative otherwise.
+
+```{r}
+#Construct monthly snowfall totals
+monthly_snowfall <- Rochester.snowfall %>%
+  group_by(Year, Month) %>%
+  summarize(
+    tot_snow = sum(snowfall, na.rm = TRUE)
+  )
+
+#Construct average monthly max temp
+monthly_tmax <- Rochester.Tmax %>%
+  group_by(Year, Month) %>%
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE)
+  )
+
+#Calculate yearly snowfall totals from 1991-2020
+monthly_snow_9120 <- Rochester.snowfall[Rochester.snowfall$Year >= 1991 & 
+                                Rochester.snowfall$Year <= 2020, ]
+annual_snow_9120 <- monthly_snow_9120 %>%
+  group_by(Year) %>%
+  summarize(
+    tot_snow = sum(snowfall)
+  )
+
+#Reference annual snowfall amount: average from 1991-2020
+annual_snow_reference <- mean(annual_snow_9120$tot_snow)
+
+#Construct annual snowfall totals
+annual_snow <- monthly_snowfall %>%
+  group_by(Year) %>%
+  summarize(
+    tot_snow = sum(tot_snow)
+  )
+
+#Construct annual snowfall deviation: annual snowfall total - annual_snow_reference
+annual_snow_deviations <- annual_snow
+annual_snow_deviations$tot_snow <- annual_snow_deviations$tot_snow - annual_snow_reference
+head(annual_snow_deviations,10)
+```
+
+Before making proper time series objects, we have to make sure the data is ordered properly by year and month.
+
+```{r}
+monthly_tmax <- monthly_tmax[order(monthly_tmax$Year, monthly_tmax$Month), ]
+annual_snow_deviations <- annual_snow_deviations[order(annual_snow_deviations$Year), ]
+```
+
+Finally, our time series objects can be created.
+
+```{r}
+max_temps <- ts(monthly_tmax$mean_tmax, start = c(1926,1), frequency = 12)
+snowfall_devs <- ts(annual_snow_deviations$tot_snow, start = 1926, frequency = 1)
+
+ts.plot(window(snowfall_devs, start = 1926), ylab = "Snowfall Deviation (in.)", main = "Rochester Snowfall Compared to 1991-2020 Average")
 ```
