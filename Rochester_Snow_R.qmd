@@ -1,7 +1,7 @@
 ---
-title: "Rochester Snowfall Since 1926"
+title: "Rochester Weather Patterns Since 1926"
 author: "Cole Durham"
-format: html
+format: pdf
 editor: visual
 ---
 
@@ -9,6 +9,7 @@ editor: visual
 library(dplyr)
 library(lubridate)
 library(imputeTS)
+library(TSA)
 ```
 
 ## 1. Introduction
@@ -192,7 +193,7 @@ Rochester.snowfall$snowfall[nov14_47_idx] <- Rochester.snowfall$snowfall[nov13_4
 The snowfall data has been successfully cleaned. Now we will look to address the missing maximum temperature entries. In order to get a sense of what imputation method will work best, we need to zoom in on the days near July 17, 1932, and February 20, 1943.
 
 ```{r}
-par(mfrow = c(2,1), mar = c(2,4,1,1))
+par(mfrow = c(2,1), mar = c(2,3,1,1))
 missing_temp_32 <- Rochester.Tmax[Rochester.Tmax$Date >= as.Date("1932-07-10") & 
                                 Rochester.Tmax$Date <= as.Date("1932-07-24"), ]
 missing_temp_43 <- Rochester.Tmax[Rochester.Tmax$Date >= as.Date("1943-02-13") & 
@@ -235,11 +236,11 @@ Rochester.Tmax$tmax <- na_interpolation(Rochester.Tmax$tmax, option = "spline")
 
 Now we will compile our time series to contain the following information (noting we do not have January 1st, 1926):
 
--   Total monthly snowfall
-
 -   Average monthly maximum temperature
 
--   Total annual snowfall deviation: compare total annual snowfall for each year to the yearly average across 1991-2020. In particular, take $T_i-R$ where $T_i$ is the annual total snowfall for year $i$ and $R$ is the reference snowfall. This quantity will be nonnegative when at least as much snow fell in year $i$ compared to the reference amount, and negative otherwise.
+-   Total annual snowfall deviation: compare total annual snowfall for each year to the yearly average across 1991-2020. In particular, take $S_i-R_S$ where $T_i$ is the annual total snowfall for year $i$ and $R_S$ is the reference snowfall. This quantity will be non-negative when at least as much snow fell in year $i$ compared to the reference amount, and negative otherwise.
+
+-   Annual maximum temperature deviation: compare the average maximum temperature over a given year to the average maximum temperature across 1991-2020. In particular, take $T_i-R_T$ where $T_i$ is the average maximum temperature for year $i$ and $R_T$ is the reference temperature. This quantity will be nonnegative when the average maximum temperature in a given year is lower than the reference.
 
 ```{r}
 #Construct monthly snowfall totals
@@ -268,6 +269,13 @@ annual_snow_9120 <- monthly_snow_9120 %>%
 #Reference annual snowfall amount: average from 1991-2020
 annual_snow_reference <- mean(annual_snow_9120$tot_snow)
 
+#Reference temp: average maximum temp over 1991-2020
+ref_temp <- Rochester.Tmax %>%
+  filter(Year >= 1991, Year <= 2020) %>%
+  summarize(ref_temp = mean(tmax, na.rm = TRUE)) %>%
+  pull(ref_temp)
+
+
 #Construct annual snowfall totals
 annual_snow <- monthly_snowfall %>%
   group_by(Year) %>%
@@ -275,10 +283,20 @@ annual_snow <- monthly_snowfall %>%
     tot_snow = sum(tot_snow)
   )
 
+#Construct average annual max temperatures
+annual_tmax <- Rochester.Tmax %>%
+  group_by(Year) %>%
+  summarize(
+    tmax_avg = mean(tmax)
+  )
+
 #Construct annual snowfall deviation: annual snowfall total - annual_snow_reference
 annual_snow_deviations <- annual_snow
 annual_snow_deviations$tot_snow <- annual_snow_deviations$tot_snow - annual_snow_reference
-head(annual_snow_deviations,10)
+
+#Construct annual temperature deviations
+annual_tmax_deviations <- annual_tmax
+annual_tmax_deviations$tmax_avg <- annual_tmax_deviations$tmax_avg - ref_temp
 ```
 
 Before making proper time series objects, we have to make sure the data is ordered properly by year and month.
@@ -288,11 +306,45 @@ monthly_tmax <- monthly_tmax[order(monthly_tmax$Year, monthly_tmax$Month), ]
 annual_snow_deviations <- annual_snow_deviations[order(annual_snow_deviations$Year), ]
 ```
 
-Finally, our time series objects can be created.
+Finally, our time series objects can be created. The average monthly maximum temperature series will be limited to January, 1950 and beyond.
 
 ```{r}
-max_temps <- ts(monthly_tmax$mean_tmax, start = c(1926,1), frequency = 12)
-snowfall_devs <- ts(annual_snow_deviations$tot_snow, start = 1926, frequency = 1)
+par(mfrow=c(3,1), mar = c(2,4,1,1))
 
+#Restrict max temp average by month to Jan 1950 - Sep 2025
+max_temps <- ts(monthly_tmax$mean_tmax, start = c(1926, 1), frequency = 12)
+max_temps <- window(max_temps, start = c(1950, 1), end = c(2025, 9))
+
+snowfall_devs <- ts(annual_snow_deviations$tot_snow, start = 1926, frequency = 1)
+max_tempdevs <- ts(annual_tmax_deviations$tmax_avg, start = 1926, frequency = 1)
+
+ts.plot(max_temps, ylab = "Temp (deg F)", main = "Rochester Average Monthly Maximum Temp")
 ts.plot(window(snowfall_devs, start = 1926), ylab = "Snowfall Deviation (in.)", main = "Rochester Snowfall Compared to 1991-2020 Average")
+ts.plot(window(max_tempdevs, start = 1926), ylab = "Temp (deg F)", main = "Rochester Max Temp Deviations from 1991-2020 Average")
+```
+
+By construction, the latter two time series are more similar in nature to each other than to the first. The seasonal nature of the maximum temperature averaged over each month provides us with a different sort of forecasting opportunity, which we explore in the next section.
+
+## 3. Analysis of Average Monthly Maximum Temperature
+
+### 3.1 Preliminary Analysis
+
+The time series `max_temps` exhibits regular seasonal behavior with stable amplitude and limited discernible trend. We will examine these claims more closely, beginning with two different methods of trend estimation.
+
+One nonparametric method we may use to estimate trend to avoid assuming any functional form is Season-Trend LOESS, a form of detrending via local regression.
+
+```{r}
+stl_detrending <- stl(max_temps, s.window = "periodic", t.window = 135)
+plot(stl_detrending)
+```
+
+We will split the series into a training portion from January, 1970 until December, 2024, and forecast portion from January, 2025 until September, 2025. Then, we will generate a line of best fit.
+
+```{r}
+motemps.train <- window(max_temps, start = c(1970, 1), end = c(2024,12))
+motempts.fore <- window(max_temps, start = c(2025,1), end = c(2025, 9))
+
+n_ttrain <- length(motemps.train)
+n_tfore <- length(motempts.fore)
+
 ```
