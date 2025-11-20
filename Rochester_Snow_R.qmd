@@ -5,11 +5,14 @@ format: pdf
 editor: visual
 ---
 
-```{r}
+```{r, message=FALSE, echo=FALSE}
+
 library(dplyr)
 library(lubridate)
 library(imputeTS)
 library(TSA)
+library(forecast)
+library(tidyverse)
 ```
 
 ## 1. Introduction
@@ -327,6 +330,8 @@ By construction, the latter two time series are more similar in nature to each o
 
 ## 3. Analysis of Average Monthly Maximum Temperature
 
+Our main goal in modeling the average monthly maximum temperature is to be able to forecast future movement of the series due to trend and seasonal factors.
+
 ### 3.1 Preliminary Analysis
 
 The time series `max_temps` exhibits regular seasonal behavior with stable amplitude and limited discernible trend. We will examine these claims more closely, beginning with two different methods of trend estimation.
@@ -334,17 +339,173 @@ The time series `max_temps` exhibits regular seasonal behavior with stable ampli
 One nonparametric method we may use to estimate trend to avoid assuming any functional form is Season-Trend LOESS, a form of detrending via local regression.
 
 ```{r}
-stl_detrending <- stl(max_temps, s.window = "periodic", t.window = 135)
-plot(stl_detrending)
+stl_detrending <- stl(max_temps, s.window = "periodic", t.window = 241)
+plot(stl_detrending, main="Detrending via STL")
 ```
 
-We will split the series into a training portion from January, 1970 until December, 2024, and forecast portion from January, 2025 until September, 2025. Then, we will generate a line of best fit.
+We use a window of length 241 months to extract the trend over approximately twenty year rolling periods, as this was the minimum window size at which predominantly low-frequency movement was captured. A trend is present which accounts for a roughly 2 degree Fahrenheit swing between a minimum of approximately 57 degrees in the early 1960's and a maximum of 59 degrees in 2024. This is consistent with long-term regional climate change.
+
+To confirm that the above process leaves a remainder which resembles white noise, i.e. temporal dependence has been removed, we can inspect the ACF and PACF.
 
 ```{r}
-motemps.train <- window(max_temps, start = c(1970, 1), end = c(2024,12))
-motempts.fore <- window(max_temps, start = c(2025,1), end = c(2025, 9))
-
-n_ttrain <- length(motemps.train)
-n_tfore <- length(motempts.fore)
+par(mfrow=c(2,1), mar = c(4,3,2.5,2))
+acf(stl_detrending$time.series[,"remainder"], main = "ACF, PACF of Remainder", lag.max = 36)
+pacf(stl_detrending$time.series[,"remainder"], main="", lag.max = 36)
 
 ```
+
+The sample ACF does not have consistent significant spikes at positive lags within a three year window, suggesting the remainder does resemble a white noise process. Our next step is to create a baseline model by using polynomial regression to model the trend component and monthly indicator variables to model the seasonal component.
+
+### 3.2 Baseline Model
+
+To train and then evaluate our initial model, we will create a training set from January, 1950 until December, 2024, and a forecast set from January, 2025 until September, 2025.
+
+```{r}
+#Create train/forecast sets from actual data and output from stl().
+motemps.train <- window(max_temps, start = c(1950, 1), end = c(2024,12))
+motemps.fore <- window(max_temps, start = c(2025,1), end = c(2025, 9))
+
+motemps_trend.train <- window(stl_detrending$time.series[,"trend"],
+                              start = c(1950, 1), end = c(2024,12))
+motemps_trend.fore <- window(stl_detrending$time.series[,"trend"],
+                              start = c(2025,1), end = c(2025, 9))
+
+motemps_seas.train <- window(stl_detrending$time.series[,"seasonal"],
+                              start = c(1950, 1), end = c(2024,12))
+motemps_seas.fore <- window(stl_detrending$time.series[,"seasonal"],
+                              start = c(2025,1), end = c(2025, 9))
+
+n_ttrain <- length(motemps.train)
+n_tfore <- length(motemps.fore)
+
+#Training time data
+ttrain_trend_df <- tibble(
+  t_fit = 1:n_ttrain,
+  t_sqfit = t_fit^2,
+  t_cubefit = t_fit^3
+)
+
+#Forecasting time data
+tfore_trend_df <- tibble(
+  t_fit = (n_ttrain+1):(n_ttrain+n_tfore),
+  t_sqfit = t_fit^2,
+  t_cubefit = t_fit^3
+)
+
+mlr.line <- lm(motemps_trend.train ~ t_fit, data = ttrain_trend_df)
+mlr.quadr <- lm(motemps_trend.train ~ t_fit + t_sqfit, data = ttrain_trend_df)
+mlr.cubic <- lm(motemps_trend.train ~ t_fit + t_sqfit + t_cubefit, data = ttrain_trend_df)
+```
+
+```{r}
+trend_pred_quad <- cbind(motemps_trend.train, mlr.line$fitted, mlr.quadr$fitted, mlr.cubic$fitted)
+ts.plot(trend_pred_quad, col=c("black", "red", "purple", "blue"), lty = c(1,2,4,6), main = "Estimating Trend with Polynomials", lwd = c(1.5,1.25,1.25,1.25))
+
+legend("topleft",
+       legend = c("STL trend", "Linear", "Quadratic", "Cubic"),
+       col = c("black", "red", "purple", "blue"),
+       lty = c(1, 2, 4, 6),
+       lwd = 2,
+       bty = "n")
+```
+
+It is visually evident that the linear model is too simple to capture the growth pattern while the quadratic and cubic models have comparable performance. These statements are supported by the model summaries:
+
+```{r}
+summary(mlr.line)
+summary(mlr.quadr)
+summary(mlr.cubic)
+```
+
+Retaining only the quadratic and cubic models for consideration, we wish to compare their performance on the out-of-sample data. The plots give the initial impression that the actual trend of the data grows too quickly for the quadratic model to keep pace, while the cubic model does a more reasonable job.
+
+```{r, echo=FALSE}
+# Use predict function 
+#pfore.lin  <- predict(mlr.line,  newdata = tfore_trend_df,       se.fit = TRUE)
+pfore.quad <- predict(mlr.quadr, newdata = tfore_trend_df,     se.fit = TRUE)
+pfore.cub  <- predict(mlr.cubic, newdata = tfore_trend_df,   se.fit = TRUE)
+
+#Plot of time series with fits and out-of-sample forecasts
+# Linear Trend Model fits and forecasts
+#linff <- c(mlr.line$fitted, pfore.lin$fit)
+
+# Quadratic Trend Model fits and forecasts
+quadff <- c(mlr.quadr$fitted, pfore.quad$fit)
+
+# Cubic Trend Model fits and forecasts
+cubff <- c(mlr.cubic$fitted, pfore.cub$fit)
+
+# Bind observed data and fits+forecasts
+#obslin <- cbind(stl_detrending$time.series[,"trend"], linff)
+obsquad <- cbind(stl_detrending$time.series[,"trend"], quadff)
+obscub <- cbind(stl_detrending$time.series[,"trend"], cubff)
+
+#par(mfrow = c(1,3), mar = c(4, 4, 2.5, 2))
+#ts.plot(obslin, main = "Linear Trend Model", 
+        #col = c("black", "blue"), ylab = "Temp (F)")
+#abline(v = time(stl_detrending$time.series[,"trend"])[n_ttrain], 
+       #col = "red", lty = "dashed")
+
+ts.plot(obsquad, main = "Quadratic Trend Model", col = c("black", "blue"),
+        ylab="Temp (F)")
+abline(v = time(stl_detrending$time.series[,"trend"])[n_ttrain], 
+       col = "red", lty = "dashed")
+
+ts.plot(obscub, main = "Cubic Trend Model", col = c("black", "blue"),
+        ylab="Temp (F)")
+abline(v = time(stl_detrending$time.series[,"trend"])[n_ttrain], 
+       col = "red", lty = "dashed")
+
+```
+
+To confirm the superiority of the cubic model, we calculate standard forecast metrics.
+
+```{r}
+# Forecast/Prediction errors: Observed - Predicted
+efore.quad <- motemps_trend.fore - pfore.quad$fit
+efore.cub <- motemps_trend.fore - pfore.cub$fit
+
+# Forecast evaluation criteria
+me.quad <- mean(efore.quad)                       # Mean Error
+mpe.quad <- 100*(mean(efore.quad/motemps_trend.fore))          # Mean Percent Error
+mse.quad <- sum(efore.quad**2)/n_tfore              # Mean Squared Error
+mae.quad <- mean(abs(efore.quad))                 # Mean Absolute Error
+mape.quad <- 100*(mean(abs((efore.quad)/motemps_trend.fore)))  # Mean Absolute Percent Error 
+fec.quad <- data.frame(quadratic = rbind(me.quad, mpe.quad, 
+                                      mse.quad, mae.quad, mape.quad), 
+                      row.names = c("me", "mpe", "mse", "mae", "mape"))
+
+# Forecast evaluation criteria
+me.cube <- mean(efore.cub)                       # Mean Error
+mpe.cube <- 100*(mean(efore.cub/motemps_trend.fore))          # Mean Percent Error
+mse.cube <- sum(efore.cub**2)/n_tfore              # Mean Squared Error
+mae.cube <- mean(abs(efore.cub))                 # Mean Absolute Error
+mape.cube <- 100*(mean(abs((efore.cub)/motemps_trend.fore)))  # Mean Absolute Percent Error 
+fec.cube <- data.frame(cubic = rbind(me.cube, mpe.cube, 
+                                      mse.cube, mae.cube, mape.cube), 
+                      row.names = c("me", "mpe", "mse", "mae", "mape"))
+
+round(fec.quad, digits = 4)
+round(fec.cube, digits = 4)
+```
+
+As expected, the cubic trend model has significantly better forecast performance than the quadratic model. We may also consider information criterion when performing model selection, though our forecasting purposes place more weight on the above metrics.
+
+```{r}
+k_2 <- 2
+k_3 <- 3
+
+AIC.quad <- AIC(mlr.quadr, k=k_2)
+AIC.cubic <- AIC(mlr.cubic, k=k_3)
+
+AIC_vals <- data.frame(AIC = rbind(AIC.quad, 
+                                      AIC.cubic), 
+                      row.names = c("Quadratic", "Cubic"))
+AIC_vals
+```
+
+This confirms that the increased complexity of the cubic model has merit. We will move forward with the long-term temperature trend modeled by the polynomial in $t$, measured in months since December, 1949:
+
+$$
+T_{trend}(t) = 57.48 - 0.0023t + (8.327\times 10^{-7})t^2+(4.784\times 10^{-9})t^3.
+$$
